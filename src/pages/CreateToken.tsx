@@ -1,33 +1,135 @@
-// CreateToken.jsx
+// CreateToken.tsx
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { FaTelegram, FaTwitter, FaGlobe } from "react-icons/fa6";
+import { prepareContractCall } from "thirdweb";
+import { useSendTransaction, useActiveAccount } from "thirdweb/react";
+// import { ConnectButton } from "thirdweb/react";
+// import { client } from "../client";
+import ConnectWalletButton from "../components/ConnectButton";
 
-// NOTE: If you plan to enable on-chain wallet actions later, re-add ethers and wallet logic.
-// import { ethers } from "ethers";
-
-const DEFAULT_DEPLOY_FEE = "0.99"; // UI-only display
-
+const DEFAULT_DEPLOY_FEE = "0.001"; // UI-only display
 const MAX_IMAGE_MB = 5;
 
-const CreateToken = () => {
+// ---------- helpers ----------
+const parseUnits = (valStr: string, decimals: number): bigint => {
+  const [w, f = ""] = String(valStr).trim().split(".");
+  const frac = (f + "0".repeat(decimals)).slice(0, decimals);
+  return BigInt(w || "0") * 10n ** BigInt(decimals) + BigInt(frac || "0");
+};
+const parseEther = (ethStr: string): bigint => parseUnits(ethStr, 18);
+
+// ---------- Pinata uploaders ----------
+interface PinataResponse {
+  cid: string;
+  gatewayUrl: string;
+  ipfsUri: string;
+}
+
+const uploadToPinata = async (file: File): Promise<PinataResponse> => {
+  const url = "https://api.pinata.cloud/pinning/pinFileToIPFS";
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+  const secretKey = import.meta.env.VITE_PINATA_SECRET_API_KEY;
+
+  if (!apiKey || !secretKey) {
+    throw new Error("Pinata API key or secret is not defined");
+  }
+
+  try {
+    const response = await axios.post(url, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        pinata_api_key: apiKey,
+        pinata_secret_api_key: secretKey,
+      },
+    });
+    const hash = response.data.IpfsHash;
+    return {
+      cid: hash,
+      gatewayUrl: `https://gateway.pinata.cloud/ipfs/${hash}`,
+      ipfsUri: `ipfs://${hash}`,
+    };
+  } catch (error: any) {
+    console.error("Pinata upload error:", error.response || error);
+    throw new Error("Pinata upload failed: " + (error.response?.data?.error || error.message));
+  }
+};
+
+const uploadJSONToPinata = async (json: object): Promise<PinataResponse> => {
+  const url = "https://api.pinata.cloud/pinning/pinJSONToIPFS";
+  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+  const secretKey = import.meta.env.VITE_PINATA_SECRET_API_KEY;
+
+  if (!apiKey || !secretKey) {
+    throw new Error("Pinata API key or secret is not defined");
+  }
+
+  try {
+    const response = await axios.post(url, json, {
+      headers: {
+        "Content-Type": "application/json",
+        pinata_api_key: apiKey,
+        pinata_secret_api_key: secretKey,
+      },
+    });
+    const hash = response.data.IpfsHash;
+    return {
+      cid: hash,
+      gatewayUrl: `https://gateway.pinata.cloud/ipfs/${hash}`,
+      ipfsUri: `ipfs://${hash}`,
+    };
+  } catch (error: any) {
+    console.error("Pinata JSON upload error:", error.response || error);
+    throw new Error("Pinata JSON upload failed: " + (error.response?.data?.error || error.message));
+  }
+};
+
+interface CreateTokenProps {
+  contract: any; // thirdweb contract type
+}
+
+const CreateToken: React.FC<CreateTokenProps> = ({ contract }) => {
   // form state
-  const [chain, setChain] = useState("Somnia (SUI)");
+  const [chainLabel, setChainLabel] = useState("Somnia Testnet");
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [twitter, setTwitter] = useState("");
   const [telegram, setTelegram] = useState("");
   const [website, setWebsite] = useState("");
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+
+  // advanced (you can hide or prefill these)
+  const [decimals, setDecimals] = useState(18);
+  const [initialSupplyTokens, setInitialSupplyTokens] = useState("1000000"); // human-readable tokens
+
+  // optional liquidity seeding
+  const [seedWithETH, setSeedWithETH] = useState(false);
+  const [tokenAmountTokens, setTokenAmountTokens] = useState("700000"); // for LP (subset of supply)
+  const [baseAmountEth, setBaseAmountEth] = useState("0.2"); // ETH to pair
+  const [lockDurationHours, setLockDurationHours] = useState("24");
+
+  // options
   const [autoRenounce, setAutoRenounce] = useState(false);
   const [lockLP, setLockLP] = useState(true);
 
-  // wallet-like state (UI only)
+  // UI state
+  const activeAccount = useActiveAccount();
+  const connectedAddress = activeAccount?.address;
   const [account, setAccount] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [txHash, setTxHash] = useState(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+
+  const { mutate: sendTransaction, isPending: isSending } = useSendTransaction();
+
+  useEffect(() => {
+    setAccount(connectedAddress || "");
+  }, [connectedAddress]);
 
   useEffect(() => {
     if (!imageFile) {
@@ -35,41 +137,35 @@ const CreateToken = () => {
       return;
     }
     const reader = new FileReader();
-    reader.onload = (e) => setImagePreview(e.target.result);
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
     reader.readAsDataURL(imageFile);
   }, [imageFile]);
 
-  // simple wallet connect UI (uses injected provider if available)
-  const connectWallet = async () => {
-    try {
-      if (!window.ethereum) {
-        setStatus("No injected wallet found (e.g. MetaMask). You can still create via backend later.");
-        return;
-      }
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      setAccount(accounts[0] || "");
-      setStatus("Wallet connected: " + (accounts[0] ? accounts[0].slice(0, 8) + "…" : ""));
-    } catch (err) {
-      console.error(err);
-      setStatus("Wallet connect failed.");
-    }
-  };
-
   // validation
-  const validate = () => {
+  const validate = (): string | null => {
+    if (!contract) return "Contract not provided.";
     if (!name.trim()) return "Token name required";
     if (!symbol.trim()) return "Token symbol required";
     if (!/^[A-Za-z0-9]{2,11}$/.test(symbol)) return "Symbol must be 2-11 alphanumeric chars (no spaces)";
+    if (!account) return "Connect your wallet to continue";
     if (imageFile) {
       const mb = imageFile.size / (1024 * 1024);
       if (mb > MAX_IMAGE_MB) return `Image too large — must be <= ${MAX_IMAGE_MB}MB`;
       if (!/^image\/(png|jpe?g|gif|webp)$/.test(imageFile.type)) return "Unsupported image type";
     }
+    if (!Number.isInteger(Number(decimals)) || Number(decimals) < 6 || Number(decimals) > 18) {
+      return "Decimals should be an integer between 6 and 18";
+    }
+    if (!/^\d+(\.\d+)?$/.test(String(initialSupplyTokens))) return "Initial supply must be a number";
+    if (seedWithETH) {
+      if (!/^\d+(\.\d+)?$/.test(String(tokenAmountTokens))) return "LP token amount must be a number";
+      if (!/^\d+(\.\d+)?$/.test(String(baseAmountEth))) return "Base ETH must be a number";
+      if (!/^\d+$/.test(String(lockDurationHours))) return "Lock duration (hours) must be an integer";
+    }
     return null;
   };
 
-  // image selector helper
-  const onSelectFile = (file) => {
+  const onSelectFile = (file: File | null) => {
     if (!file) {
       setImageFile(null);
       return;
@@ -83,8 +179,7 @@ const CreateToken = () => {
     setImageFile(file);
   };
 
-  // FRONTEND-ONLY create (simulate). Replace this with your API or on-chain call.
-  const handleCreate = async (e) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("");
     setTxHash(null);
@@ -95,37 +190,92 @@ const CreateToken = () => {
       return;
     }
 
-    setBusy(true);
-    setStatus("Preparing metadata and uploading image (simulated)...");
+    try {
+      setBusy(true);
+      setStatus("Uploading image to IPFS (Pinata)...");
+      let imageUrl: string | null = null;
 
-    // Simulate upload latency for demo
-    await new Promise((r) => setTimeout(r, 800));
+      if (imageFile) {
+        const imgRes = await uploadToPinata(imageFile);
+        imageUrl = imgRes.gatewayUrl; // use gateway URL for broad compatibility
+      }
 
-    // You can replace this with: upload to IPFS (nft.storage/web3.storage) or your /api/upload-image
-    const simulatedImageUrl = imagePreview || null;
+      setStatus("Uploading metadata to IPFS (Pinata)...");
+      const metadata = {
+        name,
+        symbol,
+        description,
+        image: imageUrl,
+        links: { twitter, telegram, website },
+        options: { autoRenounce, lockLP, seedWithETH },
+      };
+      const metaRes = await uploadJSONToPinata(metadata);
+      const metadataURI = metaRes.gatewayUrl; // you can also use metaRes.ipfsUri
 
-    const metadata = {
-      name,
-      symbol,
-      description,
-      links: { twitter, telegram, website },
-      image: simulatedImageUrl,
-      options: { autoRenounce, lockLP },
-      owner: account || "0xNotConnected",
-    };
+      // Build params
+      const dec = Number(decimals);
+      const initialSupply = parseUnits(initialSupplyTokens, dec);
 
-    setStatus("Sending create request (simulated)...");
-    // simulate server/on-chain latency
-    await new Promise((r) => setTimeout(r, 1200));
+      const methodCreate = "function createToken(string name, string symbol, uint8 decimals, uint256 initialSupply, string metadataURI, bool autoRenounce) returns (address)";
+      const methodCreateAndSeed =
+        "function createTokenAndSeedETH(string name, string symbol, uint8 decimals, uint256 initialSupply, string metadataURI, bool autoRenounce, uint256 tokenAmount, uint256 baseAmount, uint256 lockDurationSeconds) payable returns (address tokenAddr)";
 
-    // simulated tx hash — replace with real tx hash from backend or on-chain call
-    const fakeHash = "0x" + Math.random().toString(16).slice(2, 10) + Math.random().toString(16).slice(2, 8);
-    setTxHash(fakeHash);
-    setStatus("Token created (simulated). It will appear in the marketplace after indexing.");
-    setBusy(false);
+      let transaction;
+      if (seedWithETH) {
+        const tokenAmount = parseUnits(tokenAmountTokens, dec);
+        const baseAmountWei = parseEther(baseAmountEth);
+        const lockDurationSeconds = BigInt(Number(lockDurationHours) * 3600);
+
+        transaction = prepareContractCall({
+          contract,
+          method: methodCreateAndSeed,
+          params: [
+            name,
+            symbol,
+            dec,
+            initialSupply,
+            metadataURI,
+            Boolean(autoRenounce),
+            tokenAmount,
+            baseAmountWei,
+            lockDurationSeconds,
+          ],
+          value: baseAmountWei, // payable
+        });
+      } else {
+        transaction = prepareContractCall({
+          contract,
+          method: methodCreate,
+          params: [name, symbol, dec, initialSupply, metadataURI, Boolean(autoRenounce)],
+        });
+      }
+
+      setStatus("Please confirm the transaction in your wallet...");
+      sendTransaction(transaction, {
+        onSuccess: (receipt: any) => {
+          // thirdweb returns a transaction result; try common fields
+          const hash =
+            receipt?.transactionHash ||
+            receipt?.receipt?.transactionHash ||
+            receipt?.hash ||
+            null;
+          setTxHash(hash);
+          setStatus("Token created! It will appear after indexing.");
+          setBusy(false);
+        },
+        onError: (err: any) => {
+          console.error(err);
+          setStatus(err?.message || "Transaction failed");
+          setBusy(false);
+        },
+      });
+    } catch (err: any) {
+      console.error(err);
+      setStatus(err?.message || "Creation failed");
+      setBusy(false);
+    }
   };
 
-  // small preview card that mirrors your token cards
   const PreviewCard = () => (
     <div className="bg-[#132030] border border-blue-500 rounded-lg p-4 w-full">
       <div className="flex justify-between items-start gap-3">
@@ -142,7 +292,7 @@ const CreateToken = () => {
 
         <div className="text-right flex-shrink-0">
           <div className="text-sm text-gray-400">Deploy Fee</div>
-          <div className="text-lg font-semibold">{DEFAULT_DEPLOY_FEE} SUI</div>
+          <div className="text-lg font-semibold">{DEFAULT_DEPLOY_FEE} ETH</div>
         </div>
       </div>
 
@@ -167,7 +317,9 @@ const CreateToken = () => {
 
         <div className="flex items-center gap-3">
           <div className="text-xs text-gray-400">Owner:</div>
-          <div className="text-sm text-blue-400">{account ? account.slice(0, 8) + "…" : "Not connected"}</div>
+          <div className="text-sm text-blue-400">
+            {account ? account.slice(0, 8) + "…" : "Not connected"}
+          </div>
         </div>
       </div>
 
@@ -191,7 +343,7 @@ const CreateToken = () => {
   return (
     <div className="bg-gradient-to-b from-[#0b1622] to-[#111827] min-h-screen text-white px-4 py-8">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-2">Launch your token on Move Pump</h1>
+        <h1 className="text-3xl font-bold text-center mb-2">Launch your token on Somnia Pump</h1>
         <p className="text-center text-blue-400 mb-6">No-code token & liquidity seeding for Somnia</p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -201,11 +353,11 @@ const CreateToken = () => {
               <label className="block text-xs text-gray-300 mb-1">Chain</label>
               <select
                 className="w-full bg-[#0b1420] px-3 py-2 rounded text-sm"
-                value={chain}
-                onChange={(e) => setChain(e.target.value)}
+                value={chainLabel}
+                onChange={(e) => setChainLabel(e.target.value)}
                 aria-label="Select chain"
               >
-                <option>Somnia (SUI)</option>
+                <option>Somnia Testnet</option>
               </select>
 
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -230,6 +382,33 @@ const CreateToken = () => {
                     aria-label="Token symbol"
                   />
                 </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-gray-300">Decimals</label>
+                  <input
+                    value={decimals}
+                    onChange={(e) => setDecimals(Number(e.target.value))}
+                    className="mt-1 w-full px-3 py-2 rounded bg-[#0b1420] text-sm"
+                    placeholder="18"
+                    aria-label="Decimals"
+                    type="number"
+                    min={6}
+                    max={18}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-300">Initial Supply (tokens)</label>
+                  <input
+                    value={initialSupplyTokens}
+                    onChange={(e) => setInitialSupplyTokens(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded bg-[#0b1420] text-sm"
+                    placeholder="1000000"
+                    aria-label="Initial supply"
+                  />
+                </div>
+                <div />
               </div>
 
               <div className="mt-4">
@@ -271,10 +450,7 @@ const CreateToken = () => {
               <div className="mt-4">
                 <label className="text-xs text-gray-300">Logo / Image (PNG/JPG, max {MAX_IMAGE_MB}MB)</label>
                 <div className="mt-2 flex gap-3 items-center">
-                  <label
-                    className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded cursor-pointer text-sm"
-                    aria-label="Upload image"
-                  >
+                  <label className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded cursor-pointer text-sm" aria-label="Upload image">
                     Upload
                     <input
                       type="file"
@@ -283,9 +459,15 @@ const CreateToken = () => {
                       className="hidden"
                     />
                   </label>
-                  <div className="text-sm text-gray-300 truncate">{imageFile ? imageFile.name : "No file selected"}</div>
+                  <div className="text-sm text-gray-300 truncate">
+                    {imageFile ? imageFile.name : "No file selected"}
+                  </div>
                 </div>
-                {imagePreview && <div className="mt-3"><img src={imagePreview} alt="preview" className="w-28 h-28 object-cover rounded-md border" /></div>}
+                {imagePreview && (
+                  <div className="mt-3">
+                    <img src={imagePreview} alt="preview" className="w-28 h-28 object-cover rounded-md border" />
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -296,6 +478,15 @@ const CreateToken = () => {
                   </label>
 
                   <label className="text-sm flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={seedWithETH}
+                      onChange={(e) => setSeedWithETH(e.target.checked)}
+                    />
+                    <span className="text-xs text-gray-300">Seed liquidity with ETH</span>
+                  </label>
+
+                  <label className="text-sm flex items-center gap-2">
                     <input type="checkbox" checked={lockLP} onChange={(e) => setLockLP(e.target.checked)} />
                     <span className="text-xs text-gray-300">Lock LP on launch</span>
                   </label>
@@ -303,32 +494,63 @@ const CreateToken = () => {
 
                 <div className="text-right">
                   <div className="text-xs text-gray-400">Deployment Fee</div>
-                  <div className="text-lg font-semibold">{DEFAULT_DEPLOY_FEE} SUI</div>
+                  <div className="text-lg font-semibold">{DEFAULT_DEPLOY_FEE} ETH</div>
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-3 flex-col sm:flex-row">
-                <button
-                  type="button"
-                  onClick={connectWallet}
-                  className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm"
-                >
-                  {account ? `Connected: ${account.slice(0, 6)}…` : "Connect Wallet"}
-                </button>
+              {seedWithETH && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-300">LP Token Amount</label>
+                    <input
+                      value={tokenAmountTokens}
+                      onChange={(e) => setTokenAmountTokens(e.target.value)}
+                      className="mt-1 w-full px-3 py-2 rounded bg-[#0b1420] text-sm"
+                      placeholder="700000"
+                      aria-label="LP token amount"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-300">Base Amount (ETH)</label>
+                    <input
+                      value={baseAmountEth}
+                      onChange={(e) => setBaseAmountEth(e.target.value)}
+                      className="mt-1 w-full px-3 py-2 rounded bg-[#0b1420] text-sm"
+                      placeholder="0.2"
+                      aria-label="Base ETH amount"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-300">Lock Duration (hours)</label>
+                    <input
+                      value={lockDurationHours}
+                      onChange={(e) => setLockDurationHours(e.target.value)}
+                      className="mt-1 w-full px-3 py-2 rounded bg-[#0b1420] text-sm"
+                      placeholder="24"
+                      aria-label="Lock duration hours"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-3 flex-col sm:flex-row items-stretch">
+                <div className="w-full sm:flex-1">
+                  <ConnectWalletButton theme="dark" />
+                </div>
 
                 <button
                   type="submit"
-                  disabled={busy}
-                  className="w-full sm:flex-1 bg-gradient-to-r from-indigo-500 to-pink-500 px-4 py-2 rounded text-sm"
+                  disabled={busy || isSending}
+                  className="w-full sm:flex-1 bg-gradient-to-r from-indigo-500 to-pink-500 px-4 py-2 rounded text-sm disabled:opacity-60"
                 >
-                  {busy ? "Working..." : "Create Token"}
+                  {busy || isSending ? "Working..." : seedWithETH ? "Create + Seed ETH" : "Create Token"}
                 </button>
               </div>
 
               {status && <div className="mt-3 text-sm text-gray-300">{status}</div>}
               {txHash && (
                 <div className="mt-2 text-xs text-blue-300 break-all">
-                  Tx (simulated): <a target="_blank" rel="noreferrer" href="#">{txHash}</a>
+                  Tx: <span>{txHash}</span>
                 </div>
               )}
             </div>
