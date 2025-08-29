@@ -7,7 +7,7 @@ import { client } from "../client";
 import { somniaTestnet } from "thirdweb/chains";
 import { FaTelegram, FaTwitter, FaGlobe } from "react-icons/fa6";
 
-/* --------------------------- Helpers --------------------------- */
+/* Helpers */
 const formatUnits = (value: bigint, decimals: number) => {
   const s = value.toString().padStart(decimals + 1, "0");
   const i = s.length - decimals;
@@ -15,7 +15,6 @@ const formatUnits = (value: bigint, decimals: number) => {
   const frac = s.slice(i).replace(/0+$/, "");
   return frac ? `${whole}.${frac}` : whole;
 };
-
 const parseUnits = (value: string, decimals: number): bigint => {
   const clean = (value || "0").trim();
   if (!clean) return 0n;
@@ -23,16 +22,14 @@ const parseUnits = (value: string, decimals: number): bigint => {
   const frac = (f + "0".repeat(decimals)).slice(0, decimals);
   return BigInt(w || "0") * 10n ** BigInt(decimals) + BigInt(frac || "0");
 };
-
 const ipfs2http = (uri?: string) =>
-  uri && uri.startsWith("ipfs://")
+  uri?.startsWith("ipfs://")
     ? uri.replace("ipfs://", "https://gateway.pinata.cloud/ipfs/")
     : uri;
-
 const isAddress = (v: string) => /^0x[0-9a-fA-F]{40}$/.test(v);
 
-/* --------------------------- Types ----------------------------- */
-type Factory = any;
+/* Types */
+type Props = { factory: any; router: any };
 type TokenMeta = {
   name: string;
   symbol: string;
@@ -43,137 +40,29 @@ type TokenMeta = {
   website: string;
 };
 
-type Props = { factory: Factory };
-
-/* ---------------------------- Page ----------------------------- */
-const CoinPage: React.FC<Props> = ({ factory }) => {
+export default function CoinPage({ factory, router }: Props) {
   const { tokenAddress } = useParams<{ tokenAddress: string }>();
   const tokenAddr = (tokenAddress || "").toLowerCase();
   const account = useActiveAccount();
   const { mutateAsync: sendTx, isPending } = useSendTransaction();
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [meta, setMeta] = useState<TokenMeta | null>(null);
   const [decimals, setDecimals] = useState(18);
-  const [totalSupply, setTotalSupply] = useState<string>("0");
+  const [totalSupply, setTotalSupply] = useState("0");
+  const [wethAddr, setWethAddr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [priceEthPerToken, setPriceEthPerToken] = useState("");
+  const [userBalance, setUserBalance] = useState("0");
 
-  const [routerAddr, setRouterAddr] = useState<string>("");
-  const [wethAddr, setWethAddr] = useState<string>("");
+  // Trade form state
+  const [buyEth, setBuyEth] = useState("0.1");
+  const [buyOut, setBuyOut] = useState("");
+  const [sellToken, setSellToken] = useState("1000");
+  const [sellOut, setSellOut] = useState("");
+  const [slippage, setSlippage] = useState(1);
 
-  // UI state for trade
-  const [buyEth, setBuyEth] = useState<string>("0.1");
-  const [buyOut, setBuyOut] = useState<string>("");
-  const [slippage, setSlippage] = useState<number>(1); // %
-  const [sellToken, setSellToken] = useState<string>("1000");
-  const [sellOut, setSellOut] = useState<string>("");
-
-  // Price
-  const [priceEthPerToken, setPriceEthPerToken] = useState<string>("");
-
-  /* ------------------------ Load base data ------------------------ */
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (!factory || !tokenAddr || !isAddress(tokenAddr)) {
-        setError("Invalid token address");
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        // 1) router & WETH from factory
-        const [r, w] = await Promise.all([
-          readContract({
-            contract: factory,
-            method: "function router() view returns (address)",
-          }) as Promise<string>,
-          readContract({
-            contract: factory,
-            method: "function weth() view returns (address)",
-          }) as Promise<string>,
-        ]);
-        if (cancelled) return;
-        setRouterAddr(r);
-        setWethAddr(w);
-
-        // 2) metadata from factory
-        let tm: TokenMeta;
-        try {
-          const info: any = await readContract({
-            contract: factory,
-            method:
-              "function getTokenInfo(address) view returns (address token, address creator, string name, string symbol, string description, string imageURI, string twitter, string telegram, string website, uint256 createdAt, bool lpLocked, uint256 lockId)",
-            params: [tokenAddr],
-          });
-          tm = {
-            name: info.name ?? info[2] ?? "",
-            symbol: info.symbol ?? info[3] ?? "",
-            description: info.description ?? info[4] ?? "",
-            imageURI: info.imageURI ?? info[5] ?? "",
-            twitter: info.twitter ?? info[6] ?? "",
-            telegram: info.telegram ?? info[7] ?? "",
-            website: info.website ?? info[8] ?? "",
-          };
-        } catch {
-          const m: any = await readContract({
-            contract: factory,
-            method:
-              "function getTokenMetadata(address) view returns (string name, string symbol, string description, string imageURI, string twitter, string telegram, string website)",
-            params: [tokenAddr],
-          });
-          tm = {
-            name: m.name ?? m[0] ?? "",
-            symbol: m.symbol ?? m[1] ?? "",
-            description: m.description ?? m[2] ?? "",
-            imageURI: m.imageURI ?? m[3] ?? "",
-            twitter: m.twitter ?? m[4] ?? "",
-            telegram: m.telegram ?? m[5] ?? "",
-            website: m.website ?? m[6] ?? "",
-          };
-        }
-        if (cancelled) return;
-        setMeta(tm);
-
-        // 3) ERC-20 data
-        const token = getContract({
-          client,
-          chain: somniaTestnet,
-          address: tokenAddr,
-        });
-        const [d, ts] = await Promise.all([
-          readContract({
-            contract: token,
-            method: "function decimals() view returns (uint8)",
-          }).catch(() => 18),
-          readContract({
-            contract: token,
-            method: "function totalSupply() view returns (uint256)",
-          }).catch(() => 0n),
-        ]);
-        if (cancelled) return;
-        const dec = Number(d || 18);
-        setDecimals(dec);
-        setTotalSupply(typeof ts === "bigint" ? formatUnits(ts, dec) : "0");
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load token data");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [factory, tokenAddr]);
-
-  const router = useMemo(() => {
-    if (!routerAddr) return null;
-    return getContract({ client, chain: somniaTestnet, address: routerAddr });
-  }, [routerAddr]);
-
+  /** ---------------- Contracts ---------------- */
   const token = useMemo(() => {
     if (!tokenAddr || !isAddress(tokenAddr)) return null;
     return getContract({ client, chain: somniaTestnet, address: tokenAddr });
@@ -184,14 +73,126 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
     return getContract({ client, chain: somniaTestnet, address: wethAddr });
   }, [wethAddr]);
 
-  /* ------------------------ Current price ------------------------ */
+  /** ---------------- Load token + factory data ---------------- */
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!factory || !router || !tokenAddr || !isAddress(tokenAddr)) {
+        setError("Invalid token address");
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        // Read WETH from factory
+        const w = (await readContract({
+          contract: factory,
+          method: "function weth() view returns (address)",
+        })) as string;
+        if (cancelled) return;
+        setWethAddr(w);
+
+        // metadata
+        let tm: TokenMeta;
+        try {
+          const info: any = await readContract({
+            contract: factory,
+            method:
+              "function getTokenInfo(address) view returns (address token, address creator, string name, string symbol, string description, string imageURI, string twitter, string telegram, string website, uint256 createdAt, bool lpLocked, uint256 lockId)",
+            params: [tokenAddr],
+          });
+          tm = {
+            name: info?.name ?? info[2] ?? "",
+            symbol: info?.symbol ?? info[3] ?? "",
+            description: info?.description ?? info[4] ?? "",
+            imageURI: info?.imageURI ?? info[5] ?? "",
+            twitter: info?.twitter ?? info[6] ?? "",
+            telegram: info?.telegram ?? info[7] ?? "",
+            website: info?.website ?? info[8] ?? "",
+          };
+        } catch {
+          const m: any = await readContract({
+            contract: factory,
+            method:
+              "function getTokenMetadata(address) view returns (string name, string symbol, string description, string imageURI, string twitter, string telegram, string website)",
+            params: [tokenAddr],
+          });
+          tm = {
+            name: m[0] ?? "",
+            symbol: m[1] ?? "",
+            description: m[2] ?? "",
+            imageURI: m[3] ?? "",
+            twitter: m[4] ?? "",
+            telegram: m[5] ?? "",
+            website: m[6] ?? "",
+          };
+        }
+        if (cancelled) return;
+        setMeta(tm);
+
+        // ERC20 details
+        if (token) {
+          const [d, ts] = await Promise.all([
+            readContract({
+              contract: token,
+              method: "function decimals() view returns (uint8)",
+            }).catch(() => 18),
+            readContract({
+              contract: token,
+              method: "function totalSupply() view returns (uint256)",
+            }).catch(() => 0n),
+          ]);
+          if (cancelled) return;
+          const dec = Number(d || 18);
+          setDecimals(dec);
+          setTotalSupply(typeof ts === "bigint" ? formatUnits(ts, dec) : "0");
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || "Failed to load token data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [factory, router, tokenAddr, token]);
+
+  /** ---------------- Load user balance ---------------- */
+  useEffect(() => {
+    let cancelled = false;
+    const loadBalance = async () => {
+      if (!token || !account?.address) {
+        setUserBalance("0");
+        return;
+      }
+      try {
+        const bal: bigint = await readContract({
+          contract: token,
+          method: "function balanceOf(address owner) view returns (uint256)",
+          params: [account.address],
+        });
+        if (cancelled) return;
+        setUserBalance(formatUnits(bal, decimals));
+      } catch {
+        if (!cancelled) setUserBalance("0");
+      }
+    };
+    loadBalance();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, account?.address, decimals, isPending]);
+
+  /** ---------------- Load price, quotes ---------------- */
   useEffect(() => {
     let cancelled = false;
     const loadPrice = async () => {
       setPriceEthPerToken("");
       if (!router || !wethAddr || !tokenAddr) return;
       try {
-        // Quote 1 token -> WETH to get price in ETH
         const oneToken = 10n ** BigInt(decimals);
         const out: any = await readContract({
           contract: router,
@@ -200,13 +201,9 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
           params: [oneToken, [tokenAddr, wethAddr]],
         });
         if (cancelled) return;
-        const wethOut = Array.isArray(out)
-          ? (out[out.length - 1] as bigint)
-          : 0n;
-        setPriceEthPerToken(formatUnits(wethOut, 18));
-      } catch {
-        // No liquidity or router error => leave blank
-      }
+        const wOut = Array.isArray(out) ? (out[out.length - 1] as bigint) : 0n;
+        setPriceEthPerToken(formatUnits(wOut, 18));
+      } catch {}
     };
     loadPrice();
     return () => {
@@ -214,14 +211,14 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
     };
   }, [router, tokenAddr, wethAddr, decimals]);
 
-  /* ------------------------ Quote (Buy) ------------------------ */
+  // Buy quote WETH->TOKEN
   useEffect(() => {
     let cancelled = false;
     const quote = async () => {
       setBuyOut("");
       if (!router || !wethAddr || !tokenAddr || !buyEth) return;
       try {
-        const amountIn = parseUnits(buyEth, 18); // ETH/WETH is 18
+        const amountIn = parseUnits(buyEth, 18);
         if (amountIn <= 0n) return;
         const out: any = await readContract({
           contract: router,
@@ -234,9 +231,7 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
           ? (out[out.length - 1] as bigint)
           : 0n;
         setBuyOut(formatUnits(outRaw, decimals));
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
     quote();
     return () => {
@@ -244,7 +239,7 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
     };
   }, [router, wethAddr, tokenAddr, buyEth, decimals]);
 
-  /* ------------------------ Quote (Sell) ----------------------- */
+  // Sell quote TOKEN->WETH
   useEffect(() => {
     let cancelled = false;
     const quote = async () => {
@@ -263,10 +258,8 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
         const outRaw = Array.isArray(out)
           ? (out[out.length - 1] as bigint)
           : 0n;
-        setSellOut(formatUnits(outRaw, 18)); // WETH/ETH 18
-      } catch {
-        // ignore
-      }
+        setSellOut(formatUnits(outRaw, 18));
+      } catch {}
     };
     quote();
     return () => {
@@ -274,7 +267,7 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
     };
   }, [router, wethAddr, tokenAddr, sellToken, decimals]);
 
-  /* ------------------------ Buy action (ETH->WETH->TOKEN) ------------------------ */
+  // Buy: ETH->WETH->TOKEN
   const onBuy = async () => {
     if (!account?.address || !router || !weth || !tokenAddr) return;
     try {
@@ -282,55 +275,60 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
       if (amountIn <= 0n) return;
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
 
-      // 1) Wrap ETH to WETH
-      const depositTx = prepareContractCall({
-        contract: weth,
-        method: "function deposit() payable",
-        params: [],
-        value: amountIn,
-      });
-      await sendTx(depositTx);
+      // Wrap ETH
+      await sendTx(
+        prepareContractCall({
+          contract: weth,
+          method: "function deposit() payable",
+          params: [],
+          value: amountIn,
+        })
+      );
 
-      // 2) Approve router to spend WETH
-      const approveWethTx = prepareContractCall({
-        contract: weth,
-        method:
-          "function approve(address spender, uint256 amount) returns (bool)",
-        params: [routerAddr, amountIn],
-      });
-      await sendTx(approveWethTx);
+      // Approve router to spend WETH
+      await sendTx(
+        prepareContractCall({
+          contract: weth,
+          method:
+            "function approve(address spender, uint256 amount) returns (bool)",
+          params: [router.address, amountIn],
+        })
+      );
 
-      // 3) Compute minOut with slippage
-      const out: any = await readContract({
+      // Min out
+      const quoted: any = await readContract({
         contract: router,
         method:
           "function getAmountsOut(uint amountIn, address[] path) view returns (uint[] memory amounts)",
         params: [amountIn, [wethAddr, tokenAddr]],
       });
-      const outRaw = Array.isArray(out) ? (out[out.length - 1] as bigint) : 0n;
+      const qOut = Array.isArray(quoted)
+        ? (quoted[quoted.length - 1] as bigint)
+        : 0n;
       const minOut =
-        (outRaw * BigInt(Math.floor((100 - slippage) * 100))) / 10000n;
+        (qOut * BigInt(Math.floor((100 - slippage) * 100))) / 10000n;
 
-      // 4) Swap WETH -> TOKEN
-      const swapTx = prepareContractCall({
-        contract: router,
-        method:
-          "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
-        params: [
-          amountIn,
-          minOut,
-          [wethAddr, tokenAddr],
-          account.address,
-          deadline,
-        ],
-      });
-      await sendTx(swapTx);
+      // Swap WETH -> TOKEN
+      await sendTx(
+        prepareContractCall({
+          contract: router,
+          method:
+            "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
+          params: [
+            amountIn,
+            minOut,
+            [wethAddr, tokenAddr],
+            account.address,
+            deadline,
+          ],
+        })
+      );
     } catch (e: any) {
       setError(e?.message || "Buy failed");
     }
   };
 
-  /* ------------------------ Sell action (TOKEN->WETH) ------------------------ */
+  // Sell: TOKEN->WETH
   const onSell = async () => {
     if (!account?.address || !router || !token || !wethAddr) return;
     try {
@@ -338,66 +336,62 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
       if (amountIn <= 0n) return;
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
 
-      // 1) Approve router to spend TOKEN
-      const approveTokenTx = prepareContractCall({
-        contract: token,
-        method:
-          "function approve(address spender, uint256 amount) returns (bool)",
-        params: [routerAddr, amountIn],
-      });
-      await sendTx(approveTokenTx);
+      // Approve router to spend TOKEN
+      await sendTx(
+        prepareContractCall({
+          contract: token,
+          method:
+            "function approve(address spender, uint256 amount) returns (bool)",
+          params: [router.address, amountIn],
+        })
+      );
 
-      // 2) Compute minOut with slippage
-      const out: any = await readContract({
+      // Min out
+      const quoted: any = await readContract({
         contract: router,
         method:
           "function getAmountsOut(uint amountIn, address[] path) view returns (uint[] memory amounts)",
         params: [amountIn, [tokenAddr, wethAddr]],
       });
-      const outRaw = Array.isArray(out) ? (out[out.length - 1] as bigint) : 0n;
+      const qOut = Array.isArray(quoted)
+        ? (quoted[quoted.length - 1] as bigint)
+        : 0n;
       const minOut =
-        (outRaw * BigInt(Math.floor((100 - slippage) * 100))) / 10000n;
+        (qOut * BigInt(Math.floor((100 - slippage) * 100))) / 10000n;
 
-      // 3) Swap TOKEN -> WETH (user ends up with WETH)
-      const swapTx = prepareContractCall({
-        contract: router,
-        method:
-          "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
-        params: [
-          amountIn,
-          minOut,
-          [tokenAddr, wethAddr],
-          account.address,
-          deadline,
-        ],
-      });
-      await sendTx(swapTx);
-
-      // Optional extra step: let user unwrap WETH -> ETH in a separate button/flow:
-      // prepareContractCall({ contract: weth, method: "function withdraw(uint256 wad)", params: [amountOut] })
+      // Swap TOKEN -> WETH (user ends with WETH)
+      await sendTx(
+        prepareContractCall({
+          contract: router,
+          method:
+            "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
+          params: [
+            amountIn,
+            minOut,
+            [tokenAddr, wethAddr],
+            account.address,
+            deadline,
+          ],
+        })
+      );
     } catch (e: any) {
       setError(e?.message || "Sell failed");
     }
   };
 
-  /* ----------------------------- UI ---------------------------- */
   if (!tokenAddr || !isAddress(tokenAddr)) {
     return (
       <div className="p-8 text-center text-red-400">Invalid token address</div>
     );
   }
-
-  if (loading) {
+  if (loading)
     return (
       <div className="p-8 text-center text-gray-300">
         Loading token details…
       </div>
     );
-  }
-
-  if (error) {
+  if (error)
     return <div className="p-8 text-center text-red-400">Failed: {error}</div>;
-  }
 
   return (
     <div className="bg-gradient-to-b from-[#0b1622] to-[#111827] min-h-screen text-white px-4 md:px-12 lg:px-32 py-10">
@@ -477,6 +471,7 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
           </div>
         </div>
 
+        {/* left meta ... */}
         <div className="text-sm text-gray-300">
           <div>
             Total Supply: <span className="text-green-400">{totalSupply}</span>
@@ -487,8 +482,16 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
           <div>
             Price:{" "}
             <span className="text-yellow-300">{priceEthPerToken || "—"}</span>{" "}
-            ETH per {meta?.symbol}
+            ETH
           </div>
+          {account?.address && (
+            <div>
+              Your Balance:{" "}
+              <span className="text-purple-400">
+                {userBalance} {meta?.symbol}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -523,7 +526,7 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
           </div>
           <button
             onClick={onBuy}
-            disabled={!account || isPending || !routerAddr}
+            disabled={!account || isPending || !router}
             className="mt-4 w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded"
           >
             {account
@@ -536,7 +539,13 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
 
         {/* Sell */}
         <div className="bg-[#132030] border border-blue-500 rounded-lg p-4">
-          <h2 className="font-semibold text-lg mb-3">Sell {meta?.symbol}</h2>
+          <h2 className="font-semibold text-lg">Sell {meta?.symbol}</h2>
+          {account?.address && (
+            <div className="text-xs text-gray-400 mb-1">
+              Available: <span className="text-purple-400">{userBalance}</span>{" "}
+              {meta?.symbol}
+            </div>
+          )}
           <label className="text-sm text-gray-300">
             Amount ({meta?.symbol})
           </label>
@@ -565,7 +574,7 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
           </div>
           <button
             onClick={onSell}
-            disabled={!account || isPending || !routerAddr}
+            disabled={!account || isPending || !router}
             className="mt-4 w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white py-2 rounded"
           >
             {account
@@ -578,6 +587,4 @@ const CoinPage: React.FC<Props> = ({ factory }) => {
       </div>
     </div>
   );
-};
-
-export default CoinPage;
+}
