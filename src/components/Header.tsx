@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaBars, FaTimes } from 'react-icons/fa';
+import ConnectWalletButton from './ConnectButton';
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,9 +30,9 @@ const Header = () => {
         <button className="bg-transparent border border-blue-400 text-blue-400 px-3 py-1 rounded-md hover:bg-blue-400 hover:text-white transition">
           How it works
         </button>
-        <button className="bg-blue-500 px-4 py-1 rounded-md hover:bg-blue-600 transition">
-          Connect Wallet
-        </button>
+         <div className="w-full sm:flex-1">
+                          <ConnectWalletButton theme="dark" />
+                        </div>
       </div>
 
       {/* Mobile Menu Button */}
@@ -49,11 +50,11 @@ const Header = () => {
           <Link to="/ranking" onClick={() => setIsOpen(false)} className="hover:text-blue-400">Ranking</Link>
           <Link to="/createtoken" onClick={() => setIsOpen(false)} className="hover:text-blue-400">Create Token</Link>
           <button className="bg-transparent border border-blue-400 text-blue-400 px-3 py-1 rounded-md hover:bg-blue-400 hover:text-white transition w-[80%]">
-            How it works
+            How it workss
           </button>
-          <button className="bg-blue-500 px-4 py-1 rounded-md hover:bg-blue-600 transition w-[80%]">
-            Connect Wallet
-          </button>
+           <div className="w-full sm:flex-1">
+                            <ConnectWalletButton theme="dark" />
+                          </div>
         </div>
       )}
     </header>

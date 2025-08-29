@@ -1,7 +1,9 @@
 import React from 'react';
-import { ConnectButton as ThirdwebConnectButton } from "thirdweb/react";
+import { ConnectButton  } from "thirdweb/react";
 import { inAppWallet, createWallet } from "thirdweb/wallets";
 import { client } from '../client';
+import { somniaTestnet } from "thirdweb/chains";
+
 
 const wallets = [
   inAppWallet({
@@ -18,10 +20,11 @@ const wallets = [
 
 const ConnectWalletButton: React.FC = () => {
   return (
-    <ThirdwebConnectButton
+    <ConnectButton
       client={client}
       connectModal={{ size: "compact" }}
       wallets={wallets}
+      chain={somniaTestnet}
     />
   );
 }
