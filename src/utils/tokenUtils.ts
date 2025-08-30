@@ -33,18 +33,20 @@ export async function fetchTokenInfoOnChain(
       params: [tokenAddress],
     });
 
+        const [, , name, symbol, description, imageURI, twitter, telegram, website, createdAt, lpLocked, lockId] = data;
+
     // Thirdweb returns named properties for structs, which is convenient
     return {
-      name: data.name,
-      symbol: data.symbol,
-      description: data.description,
-      imageURI: data.imageURI,
-      twitter: data.twitter,
-      telegram: data.telegram,
-      website: data.website,
-      createdAt: data.createdAt,
-      lpLocked: data.lpLocked,
-      lockId: data.lockId,
+      name,
+      symbol,
+      description,
+      imageURI,
+      twitter,
+      telegram,
+      website,
+      createdAt,
+      lpLocked,
+      lockId,
     };
   } catch (e) {
     // If getTokenInfo fails, try the shorthand getTokenMetadata
@@ -60,21 +62,17 @@ export async function fetchTokenInfoOnChain(
       params: [tokenAddress],
     });
 
-    // `getTokenMetadata` returns an array if accessed directly from the contract,
-    // so we access by index or ensure the method returns named properties.
-    // Assuming it returns named properties for simplicity here, or you'd destructure:
-    // const [name, symbol, description, imageURI, twitter, telegram, website] = meta as [string, string, string, string, string, string, string];
-    // Then return an object. For clarity, I'm assuming thirdweb gives named properties if defined.
+    const [name, symbol, description, imageURI, twitter, telegram, website] = meta;
 
     // If the contract method is defined to return named properties and thirdweb handles it:
     return {
-      name: meta.name,
-      symbol: meta.symbol,
-      description: meta.description,
-      imageURI: meta.imageURI,
-      twitter: meta.twitter,
-      telegram: meta.telegram,
-      website: meta.website,
+      name,
+      symbol,
+      description,
+      imageURI,
+      twitter,
+      telegram,
+      website,
       // createdAt, lpLocked, lockId are not available via this getter
     };
   }

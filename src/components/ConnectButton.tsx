@@ -25,6 +25,7 @@ const ConnectWalletButton: React.FC = () => {
       connectModal={{ size: "compact" }}
       wallets={wallets}
       chain={somniaTestnet}
+      connectButton={{ label: "Connect Button" }}
     />
   );
 }

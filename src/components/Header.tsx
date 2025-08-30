@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import ConnectWalletButton from './ConnectButton';
@@ -27,11 +27,11 @@ const Header = () => {
 
       {/* Right: Buttons (desktop/tablet) */}
       <div className="hidden md:flex items-center space-x-3">
-        <button className="bg-transparent border border-blue-400 text-blue-400 px-3 py-1 rounded-md hover:bg-blue-400 hover:text-white transition">
+        <Link to="/how-it-works" className="bg-transparent border border-blue-400 text-blue-400 px-3 py-1 rounded-md hover:bg-blue-400 hover:text-white transition">
           How it works
-        </button>
+        </Link>
          <div className="w-full sm:flex-1">
-                          <ConnectWalletButton theme="dark" />
+                          <ConnectWalletButton />
                         </div>
       </div>
 
@@ -49,11 +49,9 @@ const Header = () => {
           <Link to="/swap" onClick={() => setIsOpen(false)} className="hover:text-blue-400">Swap</Link>
           <Link to="/ranking" onClick={() => setIsOpen(false)} className="hover:text-blue-400">Ranking</Link>
           <Link to="/createtoken" onClick={() => setIsOpen(false)} className="hover:text-blue-400">Create Token</Link>
-          <button className="bg-transparent border border-blue-400 text-blue-400 px-3 py-1 rounded-md hover:bg-blue-400 hover:text-white transition w-[80%]">
-            How it workss
-          </button>
+          <Link to="/how-it-works" onClick={() => setIsOpen(false)} className="hover:text-blue-400">How it works</Link>
            <div className="w-full sm:flex-1">
-                            <ConnectWalletButton theme="dark" />
+                            <ConnectWalletButton />
                           </div>
         </div>
       )}

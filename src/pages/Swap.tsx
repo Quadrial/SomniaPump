@@ -1,4 +1,4 @@
-'''// Swap.tsx
+// Swap.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { FaChevronDown } from "react-icons/fa6";
 import { FaArrowRight } from "react-icons/fa";
@@ -182,7 +182,7 @@ const Swap = ({
   }, [tokenFactoryContract, fromToken, toToken]);
 
   // Get quote for fromAmount -> toAmount
-  const { data: quoteData, isLoading: quoteLoading } = useReadContract({
+  const { data: quoteData } = useReadContract({
     contract: routerContract,
     method:
       "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",
@@ -190,9 +190,9 @@ const Swap = ({
       fromToken && toToken && fromAmount && parseFloat(fromAmount) > 0 && wethAddr
         ? [
             parseUnits(fromAmount, fromToken.decimals),
-            [fromToken.address, toToken.address],
+            [fromToken.address, toToken.address] as const,
           ]
-        : undefined,
+        : (undefined as any),
     queryOptions: {
       enabled: !!(
         routerContract &&
@@ -218,7 +218,7 @@ const Swap = ({
   }, [quoteData, toToken]);
 
   // Get reverse quote for toAmount -> fromAmount
-  const { data: reverseQuoteData } = useReadContract({
+  useReadContract({
     contract: routerContract,
     method:
       "function getAmountsIn(uint256 amountOut, address[] path) view returns (uint256[] amounts)",
@@ -226,9 +226,9 @@ const Swap = ({
       toToken && toAmount && parseFloat(toAmount) > 0 && wethAddr
         ? [
             parseUnits(toAmount, toToken.decimals),
-            [fromToken?.address || "", toToken.address],
+            [fromToken?.address || "", toToken.address] as const,
           ]
-        : undefined,
+        : (undefined as any),
     queryOptions: {
       enabled: !!(
         routerContract &&
@@ -581,4 +581,3 @@ const Swap = ({
 };
 
 export default Swap;
-''

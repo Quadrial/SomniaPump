@@ -1,5 +1,5 @@
 // Ranking.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { readContract, getContract } from "thirdweb";
 import { client } from "../client";
@@ -246,7 +246,7 @@ async function getTokens(
 
 // Simple inline sparkline component using SVG
 const Sparkline = ({
-  points = [],
+  points = [] as number[],
   width = 100,
   height = 28,
   stroke = "#4F46E5",

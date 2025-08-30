@@ -1,5 +1,5 @@
 import { createThirdwebClient } from "thirdweb";
-import { somniaTestnet } from "thirdweb/chains";
+
 
 // Load environment variable for CLIENT_ID
 const clientId = import.meta.env.VITE_CLIENT_ID || '';
@@ -11,5 +11,4 @@ if (!clientId) {
 // Initialize the Thirdweb client
 export const client = createThirdwebClient({
   clientId, // Ensure CLIENT_ID is passed
-  activeChain: somniaTestnet, // Ensure chain is set to Somnia Testnet
 });
