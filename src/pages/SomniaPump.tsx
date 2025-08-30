@@ -4,7 +4,6 @@ import { FaTelegram, FaTwitter, FaGlobe } from "react-icons/fa6";
 import { readContract, getContract } from "thirdweb";
 import { client } from "../client"; // your shared Thirdweb client
 import { somniaTestnet } from "thirdweb/chains";
-import axios from "axios"; // Ensure axios is imported
 import { Link } from "react-router-dom";
 
 type Props = { contract: any };
@@ -15,13 +14,13 @@ type TokenRow = {
   symbol: string;
   decimals: number;
   totalSupply: string;
+  marketCapEth?: string; // Add market cap in ETH
   imageURI?: string; // Renamed from 'image', to reflect it's a URI
   description?: string;
   twitter?: string;
   telegram?: string;
   website?: string;
 };
-
 const shorten = (addr: string) =>
   addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "";
 
@@ -66,7 +65,15 @@ async function fetchTokenMetadata(
         `Unexpected metadata format for ${tokenAddr}. Expected 7 strings, got:`,
         metadataArray
       );
-      return {}; // Return empty if format is wrong
+      return {
+        name: "",
+        symbol: "",
+        description: "",
+        imageURI: "",
+        twitter: "",
+        telegram: "",
+        website: "",
+      };
     }
 
     const [name, symbol, description, imageURI, twitter, telegram, website] =
@@ -83,7 +90,15 @@ async function fetchTokenMetadata(
     };
   } catch (e: any) {
     console.warn(`Could not fetch metadata for ${tokenAddr}:`, e.message);
-    return {}; // Return empty object on error
+    return {
+      name: "",
+      symbol: "",
+      description: "",
+      imageURI: "",
+      twitter: "",
+      telegram: "",
+      website: "",
+    };
   }
 }
 
@@ -91,11 +106,40 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [wethAddr, setWethAddr] = useState(""); // Add WETH address state
+
+  // Get router contract from MyRoutes (you'll need to pass it as a prop)
+  // For now, we'll define it here with the same address as in MyRoutes
+  const routerContract = useMemo(() => {
+    if (!wethAddr) return null;
+    return getContract({
+      client,
+      chain: somniaTestnet,
+      address: "0x8a5735ab1497e8b476072df1941c9dfc3e2bd9eb", // Router address from MyRoutes
+    });
+  }, [wethAddr]);
+
+  // Fetch WETH address from factory contract
+  useEffect(() => {
+    const fetchWethAddress = async () => {
+      if (!contract) return;
+      try {
+        const weth = await readContract({
+          contract,
+          method: "function weth() view returns (address)",
+        });
+        setWethAddr(weth as string);
+      } catch (e) {
+        console.error("Failed to fetch WETH address:", e);
+      }
+    };
+    fetchWethAddress();
+  }, [contract]);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      if (!contract) return; // Safety check
+      if (!contract || !wethAddr) return; // Safety check
       setLoading(true);
       try {
         /* 1️⃣ Get the total number of tokens */
@@ -132,7 +176,7 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
           })
         );
 
-        /* 3️⃣ For each token address, fetch ERC‑20 info and factory metadata */
+        /* 3️⃣ For each token address, fetch ERC‑20 info, factory metadata, and market cap */
         const rows = await Promise.all(
           addresses.map(async (addr) => {
             // Get basic ERC‑20 info from the token contract itself
@@ -171,6 +215,33 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
             /* 4️⃣ Fetch all metadata (description, image, socials) from the factory */
             const metadata = await fetchTokenMetadata(contract, addr);
 
+            /* 5️⃣ Fetch market cap in ETH */
+            let marketCapEth = "0";
+            if (routerContract && wethAddr) {
+              try {
+                // Get price of 1 token in ETH
+                const oneToken = 10n ** BigInt(decimals);
+                const out = await readContract({
+                  contract: routerContract,
+                  method:
+                    "function getAmountsOut(uint amountIn, address[] path) view returns (uint[] memory amounts)",
+                  params: [oneToken, [addr, wethAddr]],
+                });
+
+                if (Array.isArray(out) && out.length > 0) {
+                  const wOut = out[out.length - 1];
+
+                  // Calculate market cap: price per token * total supply
+                  const totalSupplyBigInt =
+                    typeof rawTotalSupply === "bigint" ? rawTotalSupply : 0n;
+                  const marketCapWei = (wOut * totalSupplyBigInt) / oneToken;
+                  marketCapEth = formatUnits(marketCapWei, 18);
+                }
+              } catch (e) {
+                console.warn(`Could not fetch market cap for ${addr}:`, e);
+              }
+            }
+
             // Construct the TokenRow object
             return {
               address: addr,
@@ -178,6 +249,7 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
               symbol: metadata.symbol || `${rawSymbol}`, // Prioritize metadata symbol, fallback to ERC20 symbol
               decimals,
               totalSupply,
+              marketCapEth, // Add market cap in ETH
               imageURI: metadata.imageURI, // Use imageURI from metadata
               description: metadata.description,
               twitter: metadata.twitter,
@@ -201,7 +273,7 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
     return () => {
       cancelled = true;
     };
-  }, [contract]); // Re-run if the contract instance changes
+  }, [contract, wethAddr]); // Re-run if the contract instance or WETH address changes
 
   /* ------------------------------------------------------------------
      Client‑side filtering for search
@@ -246,7 +318,7 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
         <select className="bg-[#132030] border border-blue-500 rounded px-4 py-2">
           <option>Sort by: Feature</option>
           <option>Newest</option>
-          <option>Total Supply</option>
+          <option>Market Cap</option>
         </select>
 
         <input
@@ -289,11 +361,13 @@ const SomniaPump: React.FC<Props> = ({ contract }) => {
                 <span className="text-blue-300">{shorten(t.address)}</span>
               </p>
 
-              {/* Supply and Decimals */}
+              {/* Market Cap and Decimals */}
               <div className="mt-3 text-sm">
                 <p>
-                  Total Supply:{" "}
-                  <span className="text-green-400">{t.totalSupply}</span>
+                  Market Cap:{" "}
+                  <span className="text-green-400">
+                    {t.marketCapEth || "0"} ETH
+                  </span>
                 </p>
                 <p>
                   Decimals: <span className="text-gray-300">{t.decimals}</span>
