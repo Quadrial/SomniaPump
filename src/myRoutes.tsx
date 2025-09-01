@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import SomniaPump from "./pages/SomniaPump";
-import Swap from "./pages/Swap";
+// import Swap from "./pages/Swap";
 import Ranking from "./pages/Ranking";
 import CreateToken from "./pages/CreateToken";
 import CoinPage from "./pages/CoinPage";
@@ -45,7 +45,7 @@ export default function MyRoutes() {
         }
       />
 
-      <Route
+      {/* <Route
         path="/swap"
         element={
           <Swap
@@ -53,7 +53,7 @@ export default function MyRoutes() {
             routerContract={routerContract}
           />
         }
-      />
+      /> */}
       <Route
         path="/ranking"
         element={<Ranking contract={tokenFactoryContract} />}
