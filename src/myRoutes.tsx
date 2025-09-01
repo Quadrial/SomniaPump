@@ -45,15 +45,7 @@ export default function MyRoutes() {
         }
       />
 
-      <Route
-        path="/swap"
-        element={
-          <Swap
-            tokenFactoryContract={tokenFactoryContract}
-            routerContract={routerContract}
-          />
-        }
-      />
+      <Route path="/swap" element={<Swap />} />
       <Route
         path="/ranking"
         element={<Ranking contract={tokenFactoryContract} />}
