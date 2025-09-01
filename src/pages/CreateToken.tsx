@@ -224,158 +224,172 @@ export default function CreateToken({ factory, router }: Props) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto mt-10 p-6 bg-white dark:bg-gray-900 rounded-2xl shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-center">Create Token</h2>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 bg-gradient-to-b from-[#0b1622] to-[#111827] rounded shadow-lg">
+      <h2 className="text-3xl font-bold mb-8 text-center text-white">
+        Launch your token on Somnia Pump
+      </h2>
 
-      {/* Quick preview */}
-      <div className="bg-[#132030] border border-blue-500 rounded-lg p-4 text-white">
-        <div className="flex justify-between items-start gap-3">
-          <div className="flex gap-3 items-start">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
-              {symbol ? symbol.slice(0, 2).toUpperCase() : "TK"}
-            </div>
-            <div>
-              <div className="font-bold text-lg">
-                {name || "Your Token Name"}
-              </div>
-              <div className="text-xs text-gray-400 mt-1">
-                {symbol ? `(${symbol.toUpperCase()})` : "(SYMBOL)"}
-              </div>
-              <p className="text-sm text-gray-300 mt-2 max-w-xl">
-                {description || "Short description will appear here."}
-              </p>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        {/* Form Section */}
+        <div className="lg:col-span-3 space-y-4">
+          <input
+            className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Token Name (e.g., My Awesome Token)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input
+              className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Token Symbol (e.g., MAT)"
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value)}
+            />
+            <input
+              className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="number"
+              placeholder="Decimals"
+              value={decimals}
+              onChange={(e) => setDecimals(Number(e.target.value))}
+            />
           </div>
-          <div>
-            {imagePreview ? (
-              <img
-                src={imagePreview}
-                className="w-20 h-20 rounded-md object-cover border"
+          <input
+            className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            type="number"
+            placeholder="Initial Supply"
+            value={initialSupply}
+            onChange={(e) => setInitialSupply(e.target.value)}
+          />
+          <textarea
+            className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <input
+              className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Twitter URL"
+              value={twitter}
+              onChange={(e) => setTwitter(e.target.value)}
+            />
+            <input
+              className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Telegram URL"
+              value={telegram}
+              onChange={(e) => setTelegram(e.target.value)}
+            />
+            <input
+              className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Website URL"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2 bg-[#0f2430] border border-blue-900 rounded-lg p-4">
+            <label className="text-sm font-medium text-gray-300">
+              Token Logo (optional)
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600"
+              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
+          {/* Seed Liquidity */}
+          <div className="mt-6 border-t border-blue-900 pt-6">
+            <label className="flex items-center gap-3 text-lg font-semibold">
+              <input
+                type="checkbox"
+                checked={seedLiquidity}
+                onChange={(e) => setSeedLiquidity(e.target.checked)}
+                className="h-5 w-5 rounded text-blue-500 focus:ring-blue-500 bg-gray-700 border-gray-600"
               />
-            ) : (
-              <div className="w-20 h-20 rounded-md bg-[#0b1220] border flex items-center justify-center text-gray-500 text-sm">
-                Preview
+              Seed Initial Liquidity (Recommended)
+            </label>
+            <p className="text-sm text-gray-400 mt-1 ml-8">
+              This will create a trading pair and set the initial price for your
+              token.
+            </p>
+            {seedLiquidity && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 pl-8">
+                <input
+                  className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Seed ETH (e.g., 0.1)"
+                  value={seedEth}
+                  onChange={(e) => setSeedEth(e.target.value)}
+                />
+                <input
+                  className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Seed Tokens (e.g., 100000)"
+                  value={seedTokens}
+                  onChange={(e) => setSeedTokens(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400">Slippage</span>
+                  <input
+                    className="w-full px-4 py-3 bg-[#0f2430] border border-blue-900 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={slippage}
+                    onChange={(e) => setSlippage(Number(e.target.value))}
+                  />
+                  <span className="text-sm text-gray-400">%</span>
+                </div>
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      <div className="space-y-4 mt-6">
-        <input
-          className="w-full px-4 py-2 border rounded-lg"
-          placeholder="Token Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          className="w-full px-4 py-2 border rounded-lg"
-          placeholder="Token Symbol"
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value)}
-        />
-        <input
-          className="w-full px-4 py-2 border rounded-lg"
-          type="number"
-          placeholder="Decimals"
-          value={decimals}
-          onChange={(e) => setDecimals(Number(e.target.value))}
-        />
-        <input
-          className="w-full px-4 py-2 border rounded-lg"
-          type="number"
-          placeholder="Initial Supply"
-          value={initialSupply}
-          onChange={(e) => setInitialSupply(e.target.value)}
-        />
-        <textarea
-          className="w-full px-4 py-2 border rounded-lg"
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <input
-            className="w-full px-4 py-2 border rounded-lg"
-            placeholder="Twitter URL"
-            value={twitter}
-            onChange={(e) => setTwitter(e.target.value)}
-          />
-          <input
-            className="w-full px-4 py-2 border rounded-lg"
-            placeholder="Telegram URL"
-            value={telegram}
-            onChange={(e) => setTelegram(e.target.value)}
-          />
-          <input
-            className="w-full px-4 py-2 border rounded-lg"
-            placeholder="Website URL"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-sm">Token Logo (optional)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-          />
-        </div>
+          <button
+            onClick={handleCreateToken}
+            disabled={isPending}
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-lg font-semibold text-lg disabled:opacity-50 transition-all duration-300"
+          >
+            {isPending
+              ? "Creating…"
+              : seedLiquidity
+              ? "Create + Seed Liquidity"
+              : "Create Token"}
+          </button>
 
-        {/* Seed Liquidity */}
-        <div className="mt-6 border-t pt-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={seedLiquidity}
-              onChange={(e) => setSeedLiquidity(e.target.checked)}
-            />
-            Seed initial liquidity (sets price)
-          </label>
-          {seedLiquidity && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-              <input
-                className="w-full px-4 py-2 border rounded-lg"
-                placeholder="Seed ETH (e.g., 0.1)"
-                value={seedEth}
-                onChange={(e) => setSeedEth(e.target.value)}
-              />
-              <input
-                className="w-full px-4 py-2 border rounded-lg"
-                placeholder="Seed Tokens (e.g., 100000)"
-                value={seedTokens}
-                onChange={(e) => setSeedTokens(e.target.value)}
-              />
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Slippage %</span>
-                <input
-                  className="w-full px-4 py-2 border rounded-lg"
-                  type="number"
-                  min={0}
-                  max={50}
-                  value={slippage}
-                  onChange={(e) => setSlippage(Number(e.target.value))}
-                />
-              </div>
-            </div>
+          {status && (
+            <p className="text-center mt-4 text-sm text-gray-300">{status}</p>
           )}
         </div>
 
-        <button
-          onClick={handleCreateToken}
-          disabled={isPending}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50"
-        >
-          {isPending
-            ? "Creating…"
-            : seedLiquidity
-            ? "Create + Seed Liquidity"
-            : "Create Token"}
-        </button>
-
-        {status && <p className="text-center mt-4 text-sm">{status}</p>}
+        {/* Preview Section */}
+        <div className="lg:col-span-2 lg:sticky top-24 h-fit">
+          <h3 className="text-xl font-bold mb-4 text-center">Live Preview</h3>
+          <div className="bg-[#132030] border border-blue-500 rounded-lg p-6 text-white shadow-lg">
+            <div className="flex flex-col items-center text-center">
+              {imagePreview ? (
+                <img
+                  src={imagePreview}
+                  className="w-28 h-28 rounded-full object-cover border-4 border-blue-500/50 mb-4"
+                  alt="Token Preview"
+                />
+              ) : (
+                <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 flex items-center justify-center text-white font-bold text-3xl mb-4">
+                  {symbol ? symbol.slice(0, 3).toUpperCase() : "TKN"}
+                </div>
+              )}
+              <div className="font-bold text-2xl">
+                {name || "Your Token Name"}
+              </div>
+              <div className="text-md text-gray-400 mt-1">
+                {symbol ? `(${symbol.toUpperCase()})` : "(SYMBOL)"}
+              </div>
+              <p className="text-sm text-gray-300 mt-4 max-w-md mx-auto">
+                {description ||
+                  "Your token's short description will appear here. Make it catchy!"}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

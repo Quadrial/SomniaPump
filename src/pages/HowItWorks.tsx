@@ -14,8 +14,7 @@ const HowItWorks: React.FC = () => {
               What is Somnia Pump?
             </h2>
             <p className="text-gray-300">
-              Somnia Pump is a decentralized platform for creating and launching
-              new tokens on the Somnia testnet. It provides a simple and
+              Somnia Pump is a decentralized platform for creating a new token on the Somnia testnet. It provides a simple and
               intuitive interface for users to create their own tokens, seed
               liquidity, and get their projects off the ground.
             </p>
